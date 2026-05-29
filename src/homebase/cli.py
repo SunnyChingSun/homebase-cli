@@ -19,12 +19,15 @@ from homebase.storage import (
     write_contexts,
     write_history,
 )
+from homebase.todos import add_todo, find_todo, resource_for_path
 from homebase.utils import expand_path, open_path
 
 
 app = typer.Typer(help="Organize workspace files and todos by context.")
 file_app = typer.Typer(help="Manage files in workspaces.")
+todo_app = typer.Typer(help="Manage workspace todos.")
 app.add_typer(file_app, name="file")
+app.add_typer(todo_app, name="todo")
 console = Console()
 
 
@@ -105,7 +108,10 @@ def show(name: str) -> None:
         for todo in todos:
             status = "x" if todo.get("done") else " "
             due = todo.get("due") or "no due date"
-            console.print(f"[{status}] {todo.get('id')}. {todo.get('text')} (due {due})")
+            console.print(
+                f"[{status}] {todo.get('id')}. {todo.get('text')} (due {due})",
+                markup=False,
+            )
             resources = todo.get("resources", [])
             if resources:
                 console.print("    resources:")
@@ -157,6 +163,8 @@ def file_add(
     file: str | None = typer.Argument(None),
     into: str | None = typer.Option(None, "--into"),
     new_name: str | None = typer.Option(None, "--as"),
+    todo_text: str | None = typer.Option(None, "--todo"),
+    due: str | None = typer.Option(None, "--due"),
     apply: bool = typer.Option(False, "--apply"),
 ) -> None:
     """Preview or move a file into a workspace."""
@@ -174,6 +182,10 @@ def file_add(
         into = into or None
         new_name = typer.prompt("Rename file? leave blank to keep original", default="")
         new_name = new_name or None
+        if typer.confirm("Create a todo for this file?", default=False):
+            todo_text = typer.prompt("Todo title")
+            due = typer.prompt("Due date? optional", default="")
+            due = due or None
 
     source_path, target_path, relative_path = build_target_path(context, file, into, new_name)
 
@@ -200,6 +212,13 @@ def file_add(
         raise typer.Exit(1) from exc
 
     record_file(context, relative_path)
+    if todo_text:
+        add_todo(
+            context,
+            todo_text,
+            due=due,
+            resources=[{"type": "folder" if target_path.is_dir() else "file", "path": relative_path}],
+        )
     contexts[name] = context
     write_contexts(contexts)
 
@@ -234,6 +253,170 @@ def file_list(name: str) -> None:
         return
     for file_record in files:
         console.print(f"- {file_record.get('path', '')}")
+
+
+@todo_app.command("add")
+def todo_add(
+    name: str,
+    text: str | None = typer.Argument(None),
+    due: str | None = typer.Option(None, "--due"),
+    attach: list[str] | None = typer.Option(None, "--attach"),
+) -> None:
+    """Add a todo to a workspace."""
+    ensure_storage()
+    contexts = read_contexts()
+    context = contexts.get(name)
+    if context is None:
+        console.print(f"[red]Workspace does not exist:[/red] {name}")
+        raise typer.Exit(1)
+
+    if text is None:
+        text = typer.prompt("Todo title")
+        due = typer.prompt("Due date? optional", default="")
+        due = due or None
+        attachments: list[str] = []
+        if typer.confirm("Attach resources?", default=False):
+            while True:
+                attachments.append(typer.prompt("Resource path inside workspace"))
+                if not typer.confirm("Add another resource?", default=False):
+                    break
+        attach = attachments
+        if not typer.confirm("Create?", default=True):
+            console.print("Canceled.")
+            raise typer.Exit()
+
+    resources = [resource_for_path(context, item) for item in (attach or [])]
+    todo = add_todo(context, text, due=due, resources=resources)
+    contexts[name] = context
+    write_contexts(contexts)
+    console.print(f"Added todo {todo['id']}: {todo['text']}")
+
+
+@todo_app.command("list")
+def todo_list(name: str) -> None:
+    """List todos in a workspace."""
+    ensure_storage()
+    contexts = read_contexts()
+    context = contexts.get(name)
+    if context is None:
+        console.print(f"[red]Workspace does not exist:[/red] {name}")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]{name.upper()} Todos[/bold]")
+    console.print()
+    todos = context.get("todos", [])
+    if not todos:
+        console.print("No todos yet.")
+        return
+    for todo in todos:
+        status = "x" if todo.get("done") else " "
+        due_text = f"due {todo.get('due')}" if todo.get("due") else "no due date"
+        console.print(
+            f"[{status}] {todo.get('id')}. {todo.get('text')} ({due_text})",
+            markup=False,
+        )
+        resources = todo.get("resources", [])
+        if resources:
+            console.print("    resources:")
+            for resource in resources:
+                console.print(f"    - {resource.get('type')}: {resource.get('path')}")
+
+
+@todo_app.command("done")
+def todo_done(name: str, todo_id: int) -> None:
+    """Mark a todo done."""
+    ensure_storage()
+    contexts = read_contexts()
+    context = contexts.get(name)
+    if context is None:
+        console.print(f"[red]Workspace does not exist:[/red] {name}")
+        raise typer.Exit(1)
+
+    todo = find_todo(context, todo_id)
+    if todo is None:
+        console.print(f"[red]Todo ID does not exist:[/red] {todo_id}")
+        raise typer.Exit(1)
+
+    todo["done"] = True
+    contexts[name] = context
+    write_contexts(contexts)
+    console.print(f"Done: {todo.get('text')}")
+
+
+@todo_app.command("open")
+def todo_open(name: str, todo_id: int) -> None:
+    """Open a resource attached to a todo."""
+    ensure_storage()
+    contexts = read_contexts()
+    context = contexts.get(name)
+    if context is None:
+        console.print(f"[red]Workspace does not exist:[/red] {name}")
+        raise typer.Exit(1)
+
+    todo = find_todo(context, todo_id)
+    if todo is None:
+        console.print(f"[red]Todo ID does not exist:[/red] {todo_id}")
+        raise typer.Exit(1)
+
+    resources = todo.get("resources", [])
+    if not resources:
+        console.print("This todo has no resources.")
+        return
+
+    resource = resources[0]
+    if len(resources) > 1:
+        console.print("This todo has multiple resources:")
+        console.print()
+        for index, item in enumerate(resources, start=1):
+            console.print(f"[{index}] {item.get('type')}: {item.get('path')}")
+        choice = int(typer.prompt("Open which one?"))
+        if choice < 1 or choice > len(resources):
+            console.print("[red]Invalid choice.[/red]")
+            raise typer.Exit(1)
+        resource = resources[choice - 1]
+
+    target = expand_path(context["folder"]) / resource["path"]
+    try:
+        open_path(target)
+    except (FileNotFoundError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
+@app.command()
+def check() -> None:
+    """Show unfinished todos across all workspaces."""
+    ensure_storage()
+    contexts = read_contexts()
+    rows = []
+    for workspace, context in contexts.items():
+        for todo in context.get("todos", []):
+            if todo.get("done"):
+                continue
+            resources = ", ".join(resource.get("path", "") for resource in todo.get("resources", []))
+            rows.append(
+                {
+                    "workspace": workspace,
+                    "id": str(todo.get("id")),
+                    "text": str(todo.get("text")),
+                    "due": todo.get("due") or "none",
+                    "resources": resources,
+                    "sort_due": todo.get("due") or "9999-99-99",
+                    "has_due": 0 if todo.get("due") else 1,
+                }
+            )
+
+    rows.sort(key=lambda row: (row["has_due"], row["sort_due"], row["workspace"], row["id"]))
+
+    table = Table(title="Todo Check")
+    table.add_column("Workspace")
+    table.add_column("ID", justify="right")
+    table.add_column("Todo")
+    table.add_column("Due")
+    table.add_column("Resources")
+    for row in rows:
+        table.add_row(row["workspace"], row["id"], row["text"], row["due"], row["resources"])
+    console.print(table)
 
 
 @app.command()
