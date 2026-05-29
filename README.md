@@ -76,7 +76,7 @@ hb undo
 ## Installation
 
 ```bash
-uv add "git+https://github.com/<your-username>/homebase-cli.git"
+uv add "git+https://github.com/SunnyChingSun/homebase-cli.git"
 ```
 
 Run locally during development:
