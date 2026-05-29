@@ -75,6 +75,28 @@ hb undo
 
 ## Installation
 
+Install Homebase as a command-line tool:
+
+```bash
+uv tool install "git+https://github.com/SunnyChingSun/homebase-cli.git"
+```
+
+Then run:
+
+```bash
+hb --help
+```
+
+If `hb` is not found after installation, run:
+
+```bash
+uv tool update-shell
+```
+
+Then restart your terminal.
+
+To add Homebase as a dependency inside another `uv` project, run this from a directory that has a `pyproject.toml`:
+
 ```bash
 uv add "git+https://github.com/SunnyChingSun/homebase-cli.git"
 ```
