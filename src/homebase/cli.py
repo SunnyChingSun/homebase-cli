@@ -1,9 +1,24 @@
+import shutil
+from datetime import datetime
+
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from homebase.files import build_target_path, move_into_workspace, record_file
-from homebase.storage import ensure_storage, read_contexts, write_contexts
+from homebase.files import (
+    build_target_path,
+    move_into_workspace,
+    record_file,
+    relative_to_workspace,
+    remove_file_record,
+)
+from homebase.storage import (
+    ensure_storage,
+    read_contexts,
+    read_history,
+    write_contexts,
+    write_history,
+)
 from homebase.utils import expand_path, open_path
 
 
@@ -187,6 +202,17 @@ def file_add(
     record_file(context, relative_path)
     contexts[name] = context
     write_contexts(contexts)
+
+    history = read_history()
+    history.append(
+        {
+            "old_path": str(source_path),
+            "new_path": str(target_path),
+            "workspace": name,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+        }
+    )
+    write_history(history)
     console.print(f"Moved: {source_path} -> {target_path}")
 
 
@@ -208,3 +234,42 @@ def file_list(name: str) -> None:
         return
     for file_record in files:
         console.print(f"- {file_record.get('path', '')}")
+
+
+@app.command()
+def undo() -> None:
+    """Undo the latest file move."""
+    ensure_storage()
+    history = read_history()
+    if not history:
+        console.print("No history to undo.")
+        return
+
+    latest = history[-1]
+    old_path = expand_path(latest["old_path"])
+    new_path = expand_path(latest["new_path"])
+
+    if not new_path.exists():
+        console.print(f"[red]Undo target no longer exists:[/red] {new_path}")
+        raise typer.Exit(1)
+    if old_path.exists():
+        console.print(f"[red]Original path already exists:[/red] {old_path}")
+        raise typer.Exit(1)
+
+    old_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(new_path), str(old_path))
+
+    contexts = read_contexts()
+    workspace = latest.get("workspace")
+    context = contexts.get(workspace)
+    if context is not None:
+        workspace_folder = expand_path(context["folder"])
+        relative_path = relative_to_workspace(new_path, workspace_folder)
+        remove_file_record(context, relative_path)
+        contexts[workspace] = context
+        write_contexts(contexts)
+
+    write_history(history[:-1])
+    console.print("Undo complete:")
+    console.print(str(new_path))
+    console.print(f"-> {old_path}")

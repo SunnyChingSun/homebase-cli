@@ -47,3 +47,7 @@ def record_file(context: dict, relative_path: str) -> None:
     if not any(record.get("path") == relative_path for record in files):
         files.append({"path": relative_path, "added_at": date.today().isoformat()})
 
+
+def remove_file_record(context: dict, relative_path: str) -> None:
+    files = context.setdefault("files", [])
+    context["files"] = [record for record in files if record.get("path") != relative_path]
