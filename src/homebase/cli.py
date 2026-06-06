@@ -1,5 +1,6 @@
 import shutil
 from datetime import datetime
+from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -131,7 +132,7 @@ def show(name: str) -> None:
 
 
 @app.command()
-def open(name: str, sub: str | None = typer.Option(None, "--sub")) -> None:
+def open(name: str, sub: Optional[str] = typer.Option(None, "--sub")) -> None:
     """Open a workspace folder or subfolder."""
     ensure_storage()
     contexts = read_contexts()
@@ -160,11 +161,11 @@ def open(name: str, sub: str | None = typer.Option(None, "--sub")) -> None:
 @file_app.command("add")
 def file_add(
     name: str,
-    file: str | None = typer.Argument(None),
-    into: str | None = typer.Option(None, "--into"),
-    new_name: str | None = typer.Option(None, "--as"),
-    todo_text: str | None = typer.Option(None, "--todo"),
-    due: str | None = typer.Option(None, "--due"),
+    file: Optional[str] = typer.Argument(None),
+    into: Optional[str] = typer.Option(None, "--into"),
+    new_name: Optional[str] = typer.Option(None, "--as"),
+    todo_text: Optional[str] = typer.Option(None, "--todo"),
+    due: Optional[str] = typer.Option(None, "--due"),
     apply: bool = typer.Option(False, "--apply"),
 ) -> None:
     """Preview or move a file into a workspace."""
@@ -217,7 +218,12 @@ def file_add(
             context,
             todo_text,
             due=due,
-            resources=[{"type": "folder" if target_path.is_dir() else "file", "path": relative_path}],
+            resources=[
+                {
+                    "type": "folder" if target_path.is_dir() else "file",
+                    "path": relative_path,
+                }
+            ],
         )
     contexts[name] = context
     write_contexts(contexts)
@@ -258,9 +264,9 @@ def file_list(name: str) -> None:
 @todo_app.command("add")
 def todo_add(
     name: str,
-    text: str | None = typer.Argument(None),
-    due: str | None = typer.Option(None, "--due"),
-    attach: list[str] | None = typer.Option(None, "--attach"),
+    text: Optional[str] = typer.Argument(None),
+    due: Optional[str] = typer.Option(None, "--due"),
+    attach: Optional[List[str]] = typer.Option(None, "--attach"),
 ) -> None:
     """Add a todo to a workspace."""
     ensure_storage()
@@ -274,7 +280,7 @@ def todo_add(
         text = typer.prompt("Todo title")
         due = typer.prompt("Due date? optional", default="")
         due = due or None
-        attachments: list[str] = []
+        attachments: List[str] = []
         if typer.confirm("Attach resources?", default=False):
             while True:
                 attachments.append(typer.prompt("Resource path inside workspace"))

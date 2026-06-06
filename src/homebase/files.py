@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from datetime import date
 from pathlib import Path
+from typing import Optional, Tuple, Union
 
 from homebase.utils import expand_path
 
@@ -20,10 +21,10 @@ def relative_to_workspace(path: Path, base: Path) -> str:
 
 def build_target_path(
     context: dict,
-    source: str | Path,
-    subfolder: str | None = None,
-    new_name: str | None = None,
-) -> tuple[Path, Path, str]:
+    source: Union[str, Path],
+    subfolder: Optional[str] = None,
+    new_name: Optional[str] = None,
+) -> Tuple[Path, Path, str]:
     source_path = expand_path(source)
     base = workspace_folder(context)
     target_dir = base / subfolder if subfolder else base

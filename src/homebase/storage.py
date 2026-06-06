@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 
 APP_DIR = Path.home() / ".homebase"
@@ -37,24 +37,23 @@ def ensure_storage_dir_only() -> None:
     APP_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def read_contexts() -> dict[str, Any]:
+def read_contexts() -> Dict[str, Any]:
     data = _read_json(CONTEXTS_PATH, {})
     if not isinstance(data, dict):
         return {}
     return data
 
 
-def write_contexts(contexts: dict[str, Any]) -> None:
+def write_contexts(contexts: Dict[str, Any]) -> None:
     _write_json(CONTEXTS_PATH, contexts)
 
 
-def read_history() -> list[dict[str, Any]]:
+def read_history() -> List[Dict[str, Any]]:
     data = _read_json(HISTORY_PATH, [])
     if not isinstance(data, list):
         return []
     return data
 
 
-def write_history(history: list[dict[str, Any]]) -> None:
+def write_history(history: List[Dict[str, Any]]) -> None:
     _write_json(HISTORY_PATH, history)
-

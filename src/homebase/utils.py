@@ -4,9 +4,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Union
 
 
-def expand_path(path: str | Path) -> Path:
+def expand_path(path: Union[str, Path]) -> Path:
     return Path(path).expanduser().resolve()
 
 
@@ -22,4 +23,3 @@ def open_path(path: Path) -> None:
         os.startfile(path)  # type: ignore[attr-defined]
     else:
         raise RuntimeError("Unsupported operating system")
-
